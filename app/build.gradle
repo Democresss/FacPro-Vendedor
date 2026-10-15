@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Versión: la pone GitHub Actions (número de compilación). Cada versión nueva la instala la app sola.
+def codigoVersion = (project.findProperty('versionCode') ?: '1') as Integer
+def nombreVersion = (project.findProperty('versionName') ?: '1.0.0') as String
+// Llave de firma: solo en los secretos de GitHub (nunca en el repositorio)
+def almacenFirma = System.getenv('FACPRO_KEYSTORE')
+
+android {
+    namespace 'org.facturadorproecuador.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'org.facturadorproecuador.vendedor'
+        minSdk 24
+        targetSdk 34
+        versionCode codigoVersion
+        versionName nombreVersion
+        buildConfigField 'String', 'SITIO', '"https://facturadorproecuador.org"'
+        buildConfigField 'String', 'INICIO', '"/v2/operaciones/monitor"'
+        buildConfigField 'String', 'APK', '"FacPro-Vendedor.apk"'
+        buildConfigField 'String', 'ACTUALIZACIONES', '"https://github.com/Democresss/FacPro-Vendedor/releases/latest/download/"'
+        buildConfigField 'boolean', 'CHOFER', 'false'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            if (almacenFirma) {
+                storeFile file(almacenFirma)
+                storePassword System.getenv('FACPRO_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('FACPRO_KEY_ALIAS')
+                keyPassword System.getenv('FACPRO_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (almacenFirma) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+}
