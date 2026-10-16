@@ -77,10 +77,18 @@ public class MainActivity extends Activity {
     private ConnectivityManager.NetworkCallback vigiaRed;
     /** Sin internet se usa la última versión guardada de la pantalla (y la página trabaja con lo del teléfono). */
     private boolean usandoGuardado = false;
+    private LinearLayout barraInferior;
+    private TextView tabMonitor;
+    private TextView tabMovil;
+    private TextView tabPedidos;
 
     @Override
     protected void onCreate(Bundle estado) {
         super.onCreate(estado);
+        LinearLayout contenedor = new LinearLayout(this);
+        contenedor.setOrientation(LinearLayout.VERTICAL);
+        contenedor.setBackgroundColor(Color.parseColor("#0F172A"));
+
         FrameLayout raiz = new FrameLayout(this);
         raiz.setBackgroundColor(Color.parseColor("#0F172A"));
         web = new WebView(this);
@@ -88,7 +96,11 @@ public class MainActivity extends Activity {
         sinConexion = crearSinConexion();
         sinConexion.setVisibility(View.GONE);
         raiz.addView(sinConexion, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        setContentView(raiz);
+
+        contenedor.addView(raiz, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        barraInferior = crearBarraUnificada();
+        contenedor.addView(barraInferior, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(contenedor);
 
         configurarWeb();
         vigilarRed();
@@ -112,6 +124,78 @@ public class MainActivity extends Activity {
         // Busca actualizaciones apenas se abre
         actualizador = new Actualizador(this);
         actualizador.revisar(true);
+    }
+
+    private LinearLayout crearBarraUnificada() {
+        float d = getResources().getDisplayMetrics().density;
+        LinearLayout barra = new LinearLayout(this);
+        barra.setOrientation(LinearLayout.HORIZONTAL);
+        barra.setBackgroundColor(Color.parseColor("#0B1120"));
+        int padH = (int) (8 * d);
+        int padV = (int) (6 * d);
+        barra.setPadding(padH, padV, padH, padV);
+
+        tabMonitor = crearBotonTab("🚚 Monitor V2", "/v2/operaciones/monitor", true);
+        tabMovil = crearBotonTab("📱 GPS Rápido", "/v2/operaciones/seguimiento-movil", false);
+        tabPedidos = crearBotonTab("🛒 Pedidos App", "/v2/pedidos/dashboard", false);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        int margen = (int) (3 * d);
+        lp.setMargins(margen, 0, margen, 0);
+        barra.addView(tabMonitor, lp);
+        barra.addView(tabMovil, lp);
+        barra.addView(tabPedidos, lp);
+        return barra;
+    }
+
+    private TextView crearBotonTab(String texto, String ruta, boolean activoInicial) {
+        float d = getResources().getDisplayMetrics().density;
+        TextView tv = new TextView(this);
+        tv.setText(texto);
+        tv.setGravity(Gravity.CENTER);
+        tv.setTextSize(12);
+        int padV = (int) (9 * d);
+        tv.setPadding(0, padV, 0, padV);
+        pintarTab(tv, activoInicial, ruta.contains("pedidos"));
+        tv.setOnClickListener(v -> {
+            if (sinConexion.getVisibility() == View.VISIBLE) {
+                sinConexion.setVisibility(View.GONE);
+            }
+            web.loadUrl(BuildConfig.SITIO + ruta);
+        });
+        return tv;
+    }
+
+    private void pintarTab(TextView tv, boolean activo, boolean esPedidos) {
+        if (tv == null) return;
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setCornerRadius(12 * getResources().getDisplayMetrics().density);
+        if (activo) {
+            bg.setColor(Color.parseColor(esPedidos ? "#059669" : "#4F46E5"));
+            tv.setTextColor(Color.WHITE);
+            tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        } else {
+            bg.setColor(Color.parseColor("#1E293B"));
+            tv.setTextColor(Color.parseColor("#94A3B8"));
+            tv.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        tv.setBackground(bg);
+    }
+
+    private void actualizarEstadoBarra(String url) {
+        if (barraInferior == null) return;
+        String u = url == null ? "" : url.toLowerCase();
+        if (u.contains("/login") || u.contains("/forgot-password")) {
+            barraInferior.setVisibility(View.GONE);
+            return;
+        }
+        barraInferior.setVisibility(View.VISIBLE);
+        boolean enPedidos = u.contains("/pedidos");
+        boolean enMovil = u.contains("/seguimiento-movil");
+        boolean enMonitor = !enPedidos && !enMovil;
+        pintarTab(tabMonitor, enMonitor, false);
+        pintarTab(tabMovil, enMovil, false);
+        pintarTab(tabPedidos, enPedidos, true);
     }
 
     private void configurarWeb() {
@@ -214,11 +298,13 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView v, String url, Bitmap icono) {
             urlActual = url == null ? "" : url;
+            runOnUiThread(() -> actualizarEstadoBarra(urlActual));
         }
 
         @Override
         public void onPageFinished(WebView v, String url) {
             urlActual = url == null ? "" : url;
+            runOnUiThread(() -> actualizarEstadoBarra(urlActual));
             CookieManager.getInstance().flush();
         }
 
